@@ -95,7 +95,6 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
 
     add_devices([OpenStreetMap(hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language)])
 
-
 class OpenStreetMap(Entity):
     """Representation of a Places Sensor."""
 
@@ -136,7 +135,7 @@ class OpenStreetMap(Entity):
         self._longitude_old = home_longitude
         self._latitude = home_latitude
         self._longitude = home_longitude
-        self._devicetracker_zone = 'Home'
+        self._device_zone = 'Home'
         self._mtime = str(datetime.now())
         self._distance_km = 0
         self._distance_m = 0
@@ -192,7 +191,7 @@ class OpenStreetMap(Entity):
             ATTR_LATITUDE: self._latitude,
             ATTR_LONGITUDE: self._longitude,
             ATTR_DEVICE_ENTITY: self._device_id,
-            ATTR_DEVICE_ZONE: self._devicetracker_zone,
+            ATTR_DEVICE_ZONE: self._device_zone,
             ATTR_HOME_ZONE: self._home_zone,
             ATTR_PICTURE: self._entity_picture,
             ATTR_DISTANCE_KM: self._distance_km,
@@ -311,8 +310,8 @@ class OpenStreetMap(Entity):
 
         if proceed_with_update and devicetracker_zone:
             _LOGGER.debug( "(" + self._name + ") Proceeding with update for " + self._device_id )
-            self._devicetracker_zone = devicetracker_zone
-            _LOGGER.info( "(" + self._name + ") DeviceTracker Zone (current) " + self._devicetracker_zone + " Skipped Updates: " + str(self._updateskipped))
+            self._device_zone = devicetracker_zone
+            _LOGGER.info( "(" + self._name + ") DeviceTracker Zone (current) " + self._device_zone + " Skipped Updates: " + str(self._updateskipped))
 
             self._reset_attributes()
             
@@ -322,7 +321,7 @@ class OpenStreetMap(Entity):
             self._longitude_old = old_longitude
             self._location_current = current_location
             self._location_previous = previous_location
-            self._devicetracker_zone = devicetracker_zone
+            self._device_zone = devicetracker_zone
             self._distance_km = distance_from_home
             self._distance_m = distance_m
             self._direction = direction
@@ -345,7 +344,6 @@ class OpenStreetMap(Entity):
             osm_json_input = osm_response.text
             _LOGGER.debug( "(" + self._name + ") response - " + osm_json_input)
             osm_decoded = json.loads(osm_json_input)
-            decoded = osm_decoded
 
             place_options = self._options.lower()
             place_type = '-'
@@ -381,7 +379,7 @@ class OpenStreetMap(Entity):
                         break
                 if "neighbourhood" in osm_decoded["address"]:
                     place_neighbourhood = osm_decoded["address"]["neighbourhood"]
-                if self._devicetracker_zone == 'not_home' and place_name != 'house':
+                if self._device_zone == 'not_home' and place_name != 'house':
                     new_state = place_name
                     
             if "house_number" in osm_decoded["address"]:
@@ -428,7 +426,7 @@ class OpenStreetMap(Entity):
             if 'error_message' in osm_decoded:
                 new_state = osm_decoded['error_message']
                 _LOGGER.info( "(" + self._name + ") An error occurred contacting the web service")
-            elif self._devicetracker_zone == "not_home":
+            elif self._device_zone == "not_home":
                 if city == '-':
                     city = postal_town
                     if city == '-':
@@ -445,8 +443,8 @@ class OpenStreetMap(Entity):
                     
                 user_display = []
 
-                if "zone" in display_options and ("do_not_show_not_home" not in display_options and self._devicetracker_zone != "not_home"):
-                    zone = self._devicetracker_zone
+                if "zone" in display_options and ("do_not_show_not_home" not in display_options and self._device_zone != "not_home"):
+                    zone = self._device_zone
                     user_display.append(zone)
                 if "place_name" in display_options:
                     if place_name != "-":
@@ -494,7 +492,7 @@ class OpenStreetMap(Entity):
                             
 
                 if not user_display:
-                    user_display = self._devicetracker_zone
+                    user_display = self._device_zone
                     user_display.append(street)
                     user_display.append(city)
 
