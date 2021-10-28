@@ -1,5 +1,5 @@
 {
-  "domain": "osm_geocode",
+  "domain": "openstreetmap_geocode",
   "name": "OpenStreetMap Geocode",
   "version":"0.0.2",
   "documentation": "https://github.com/timpihl/openstreetmap-geocode",
