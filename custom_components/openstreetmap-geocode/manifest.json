@@ -1,0 +1,9 @@
+{
+  "domain": "osm_geocode",
+  "name": "OpenStreetMap Geocode",
+  "version":"0.0.2",
+  "documentation": "https://github.com/timpihl/openstreetmap-geocode",
+  "dependencies": ["device_tracker"],
+  "codeowners": ["@timpihl"],
+  "requirements": []
+}

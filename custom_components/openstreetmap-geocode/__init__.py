@@ -1,0 +1,1 @@
+"""OpenStreetMap Geocode component"""
