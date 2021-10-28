@@ -111,7 +111,7 @@ class OpenStreetMap(Entity):
         self._map_zoom = map_zoom.lower()
         self._language = language.lower()
         self._language.replace(" ", "")
-        self._state = "Initializing... (since 99:99)"
+        self._state = "Initializing..."
 
         home_latitude = str(hass.states.get(home_zone).attributes.get('latitude'))
         home_longitude = str(hass.states.get(home_zone).attributes.get('longitude'))
