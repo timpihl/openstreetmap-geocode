@@ -24,6 +24,7 @@ CONF_OPTIONS = 'options'
 CONF_MAP_PROVIDER = 'map_provider'
 CONF_MAP_ZOOM = 'map_zoom'
 CONF_LANGUAGE = 'language'
+CONF_PICTURE = 'picture'
 
 ATTR_OPTIONS = 'options'
 ATTR_STREET_NAME = 'street_name'
@@ -65,6 +66,7 @@ DEFAULT_KEY = "no key"
 DEFAULT_MAP_PROVIDER = 'apple'
 DEFAULT_MAP_ZOOM = '18'
 DEFAULT_LANGUAGE = 'default'
+DEFAULT_PICTURE = ''
 
 SCAN_INTERVAL = timedelta(seconds=60)
 THROTTLE_INTERVAL = timedelta(seconds=120)
@@ -78,6 +80,7 @@ PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Optional(CONF_MAP_PROVIDER, default=DEFAULT_MAP_PROVIDER): cv.string,
     vol.Optional(CONF_MAP_ZOOM, default=DEFAULT_MAP_ZOOM): cv.string,
     vol.Optional(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): cv.string,
+    vol.Optional(CONF_PICTURE, default=DEFAULT_LANGUAGE): cv.string,
     vol.Optional(CONF_SCAN_INTERVAL, default=SCAN_INTERVAL): cv.time_period,
 })
 
@@ -93,14 +96,14 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     map_provider = config.get(CONF_MAP_PROVIDER)
     map_zoom = config.get(CONF_MAP_ZOOM)
     language = config.get(CONF_LANGUAGE)
+    picture = config.get(CONF_PICTURE)
 
-    add_devices([OpenStreetMap_Geocode(hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language)])
-
+    add_devices([OpenStreetMap_Geocode(hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language, picture)])
 
 class OpenStreetMap_Geocode(Entity):
     """Representation of a OpenStreetMap_Geocode Sensor."""
 
-    def __init__(self, hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language):
+    def __init__(self, hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language, picture):
         """Initialize the sensor."""
         self._hass = hass
         self._name = name
@@ -112,11 +115,12 @@ class OpenStreetMap_Geocode(Entity):
         self._map_zoom = map_zoom.lower()
         self._language = language.lower()
         self._language.replace(" ", "")
+        self._entity_picture = picture
         self._state = "Initializing..." #(since 99:99)"
 
         home_latitude = str(hass.states.get(home_zone).attributes.get('latitude'))
         home_longitude = str(hass.states.get(home_zone).attributes.get('longitude'))
-        self._entity_picture = hass.states.get(device_id).attributes.get('entity_picture') if hass.states.get(device_id) else None
+        #self._entity_picture = hass.states.get(device_id).attributes.get('entity_picture') if hass.states.get(device_id) else None
         self._street_name = None
         self._street_number = None
         self._street = None
@@ -437,7 +441,7 @@ class OpenStreetMap_Geocode(Entity):
             if 'error_message' in decoded:
                 new_state = decoded['error_message']
                 _LOGGER.info( "(" + self._name + ") An error occurred contacting the web service")
-            elif self._device_zone == "not_home" or "do_not_show_home" in self._options:
+            elif self._device_zone == "not_home" or self._device_zone == "Stationary" or "do_not_show_home" in self._options:
                 if city == '-':
                     city = postal_town
                     if city == '-':
