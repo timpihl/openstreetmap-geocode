@@ -26,6 +26,7 @@ CONF_MAP_ZOOM = 'map_zoom'
 CONF_LANGUAGE = 'language'
 
 ATTR_OPTIONS = 'options'
+ATTR_STREET_NAME = 'street_name'
 ATTR_STREET_NUMBER = 'street_number'
 ATTR_STREET = 'street'
 ATTR_CITY = 'city'
@@ -39,7 +40,7 @@ ATTR_PLACE_TYPE = 'place_type'
 ATTR_PLACE_NAME = 'place_name'
 ATTR_PLACE_CATEGORY = 'place_category'
 ATTR_PLACE_NEIGHBOURHOOD = 'neighbourhood'
-ATTR_DEVICE_ENTITY = 'device_entity'
+ATTR_DEVICE_ID = 'device_entity_id'
 ATTR_DEVICE_ZONE = 'device_zone'
 ATTR_PICTURE = 'entity_picture'
 ATTR_LATITUDE_OLD = 'previous_latitude'
@@ -57,7 +58,7 @@ ATTR_LOCATION_PREVIOUS = 'previous_location'
 ATTR_DIRECTION_OF_TRAVEL = 'direction_of_travel'
 ATTR_MAP_LINK = 'map_link'
 
-DEFAULT_NAME = 'places'
+DEFAULT_NAME = 'openstreetmap_geocode'
 DEFAULT_OPTION = 'zone, place'
 DEFAULT_HOME_ZONE = 'zone.home'
 DEFAULT_KEY = "no key"
@@ -65,8 +66,8 @@ DEFAULT_MAP_PROVIDER = 'apple'
 DEFAULT_MAP_ZOOM = '18'
 DEFAULT_LANGUAGE = 'default'
 
-SCAN_INTERVAL = timedelta(seconds=30)
-THROTTLE_INTERVAL = timedelta(seconds=600)
+SCAN_INTERVAL = timedelta(seconds=60)
+THROTTLE_INTERVAL = timedelta(seconds=120)
 
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
     vol.Required(CONF_DEVICE_ID): cv.string,
@@ -93,10 +94,11 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     map_zoom = config.get(CONF_MAP_ZOOM)
     language = config.get(CONF_LANGUAGE)
 
-    add_devices([OpenStreetMap(hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language)])
+    add_devices([OpenStreetMap_Geocode(hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language)])
 
-class OpenStreetMap(Entity):
-    """Representation of a Places Sensor."""
+
+class OpenStreetMap_Geocode(Entity):
+    """Representation of a OpenStreetMap_Geocode Sensor."""
 
     def __init__(self, hass, device_id, name, api_key, options, home_zone, map_provider, map_zoom, language):
         """Initialize the sensor."""
@@ -110,11 +112,12 @@ class OpenStreetMap(Entity):
         self._map_zoom = map_zoom.lower()
         self._language = language.lower()
         self._language.replace(" ", "")
-        self._state = "Initializing..."
+        self._state = "Initializing..." #(since 99:99)"
 
         home_latitude = str(hass.states.get(home_zone).attributes.get('latitude'))
         home_longitude = str(hass.states.get(home_zone).attributes.get('longitude'))
         self._entity_picture = hass.states.get(device_id).attributes.get('entity_picture') if hass.states.get(device_id) else None
+        self._street_name = None
         self._street_number = None
         self._street = None
         self._city = None
@@ -147,7 +150,7 @@ class OpenStreetMap(Entity):
         #'https://www.google.com/maps/@' + home_latitude + "," + home_longitude + ',19z'
 
         # Check if device_id was specified correctly
-        _LOGGER.info( "(" + self._name + ") DeviceTracker Entity ID is " + device_id.split('.', 1)[1] )
+        _LOGGER.info( "(" + self._name + ") Device Entity ID is " + device_id.split('.', 1)[1] )
 
         if device_id.split('.', 1)[0] in TRACKABLE_DOMAINS:
             self._device_id = device_id
@@ -173,6 +176,7 @@ class OpenStreetMap(Entity):
     def device_state_attributes(self):
         """Return the state attributes."""
         return{
+            ATTR_STREET_NAME: self._street_name,
             ATTR_STREET_NUMBER: self._street_number,
             ATTR_STREET: self._street,
             ATTR_CITY: self._city,
@@ -190,7 +194,7 @@ class OpenStreetMap(Entity):
             ATTR_LONGITUDE_OLD: self._longitude_old,
             ATTR_LATITUDE: self._latitude,
             ATTR_LONGITUDE: self._longitude,
-            ATTR_DEVICE_ENTITY: self._device_id,
+            ATTR_DEVICE_ID: self._device_id,
             ATTR_DEVICE_ZONE: self._device_zone,
             ATTR_HOME_ZONE: self._home_zone,
             ATTR_PICTURE: self._entity_picture,
@@ -235,9 +239,9 @@ class OpenStreetMap(Entity):
     def do_update(self, reason):
         """Get the latest data and updates the states."""
 
-        previous_state = self.state[:-14]
+        previous_state = self.state #[:-14]
         distance_traveled = 0
-        devicetracker_zone = None
+        device_zone = None
 
         _LOGGER.info( "(" + self._name + ") Calling update due to " + reason )
         _LOGGER.info( "(" + self._name + ") Check if update req'd : " + self._device_id )
@@ -245,22 +249,20 @@ class OpenStreetMap(Entity):
 
         if hasattr(self, '_device_id'):
             now = datetime.now()
-            old_latitude    = str(self._latitude)
-            old_longitude   = str(self._longitude)
-            new_latitude    = str(self._hass.states.get(self._device_id).attributes.get('latitude'))
-            new_longitude   = str(self._hass.states.get(self._device_id).attributes.get('longitude'))
-            home_latitude   = str(self._home_latitude)
-            home_longitude  = str(self._home_longitude)
+            old_latitude = str(self._latitude)
+            old_longitude = str(self._longitude)
+            new_latitude = str(self._hass.states.get(self._device_id).attributes.get('latitude'))
+            new_longitude = str(self._hass.states.get(self._device_id).attributes.get('longitude'))
+            home_latitude = str(self._home_latitude)
+            home_longitude = str(self._home_longitude)
             last_distance_m = self._distance_m
-            last_updated    = self._mtime
-            current_location  = new_latitude + "," + new_longitude
+            last_updated = self._mtime
+            current_location = new_latitude + "," + new_longitude
             previous_location = old_latitude + "," + old_longitude
-            home_location     = home_latitude + "," + home_longitude
+            home_location = home_latitude + "," + home_longitude
             
-            #maplink_google ='https://www.google.com/maps/@' + current_location+',' + self._map_zoom + 'z'
-            maplink_apple  = 'https://maps.apple.com/maps/?q=' + current_location + '&z=' + self._map_zoom
-            #maplink_google = 'https://www.google.com/maps/dir/?api=1&origin=' + current_location + '&destination=' + home_location + '&travelmode=driving&layer=traffic'
-            maplink_google = 'https://www.google.com/maps/search/?api=1&basemap=roadmap&layer=traffic&query=' + current_location
+            maplink_apple     = 'https://maps.apple.com/maps/?q=' + current_location + '&z=' + self._map_zoom
+            maplink_google    = 'https://www.google.com/maps/search/?api=1&basemap=roadmap&layer=traffic&query=' + current_location
             if (new_latitude != 'None' and new_longitude != 'None' and
                     home_latitude != 'None' and home_longitude != 'None'):
               distance_m = distance(float(new_latitude), float(new_longitude), float(home_latitude), float(home_longitude))
@@ -285,10 +287,10 @@ class OpenStreetMap(Entity):
            
               """Update if location has changed."""
 
-              devicetracker_zone = self.hass.states.get(self._device_id).state
+              device_zone = self.hass.states.get(self._device_id).state
               distance_traveled = distance(float(new_latitude), float(new_longitude), float(old_latitude), float(old_longitude))
 
-              _LOGGER.info( "(" + self._name + ") DeviceTracker Zone (before update): " + devicetracker_zone )
+              _LOGGER.info( "(" + self._name + ") Device Zone (before update): " + device_zone )
               _LOGGER.info( "(" + self._name + ") Meters traveled since last update: " + str(round(distance_traveled)) )
 
         proceed_with_update = True
@@ -296,22 +298,24 @@ class OpenStreetMap(Entity):
         if current_location == previous_location:
             _LOGGER.debug( "(" + self._name + ") Skipping update because co-ordinates are identical" )
             proceed_with_update = False
+
         elif int(distance_traveled) > 0 and self._updateskipped > 3:
             proceed_with_update = True
-            _LOGGER.debug( "(" + self._name + ") Allowing update after 3 skips even with distance traveled < 10m" )            
+            _LOGGER.debug( "(" + self._name + ") Allowing update after 3 skips even with distance traveled < 10m" )
+
         elif int(distance_traveled) < 10:
             self._updateskipped = self._updateskipped + 1
             _LOGGER.debug( "(" + self._name + ") Skipping update because location changed " + str(distance_traveled) + " < 10m  (" + str(self._updateskipped) + ")" )
             proceed_with_update = False
-        
+
         if previous_state == 'Initializing...':
             _LOGGER.debug( "(" + self._name + ") Peforming Initial Update for user at home..." )
             proceed_with_update = True
 
-        if proceed_with_update and devicetracker_zone:
+        if proceed_with_update and device_zone:
             _LOGGER.debug( "(" + self._name + ") Proceeding with update for " + self._device_id )
-            self._device_zone = devicetracker_zone
-            _LOGGER.info( "(" + self._name + ") DeviceTracker Zone (current) " + self._device_zone + " Skipped Updates: " + str(self._updateskipped))
+            self._device_zone = device_zone
+            _LOGGER.info( "(" + self._name + ") Device Zone (current) " + self._device_zone + " Skipped Updates: " + str(self._updateskipped))
 
             self._reset_attributes()
             
@@ -321,7 +325,7 @@ class OpenStreetMap(Entity):
             self._longitude_old = old_longitude
             self._location_current = current_location
             self._location_previous = previous_location
-            self._device_zone = devicetracker_zone
+            self._device_zone = device_zone
             self._distance_km = distance_from_home
             self._distance_m = distance_m
             self._direction = direction
@@ -335,21 +339,22 @@ class OpenStreetMap(Entity):
                 
             _LOGGER.debug( "(" + self._name + ") Map Link generated: " + self._map_link )
 
-            osm_url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + self._latitude + "&lon=" + self._longitude + ("&accept-language=" + self._language if self._language != DEFAULT_LANGUAGE else "") + "&addressdetails=1&namedetails=1&zoom=18&limit=1" + ("&email=" + self._api_key if self._api_key != DEFAULT_KEY else "")
+            url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + self._latitude + "&lon=" + self._longitude + ("&accept-language=" + self._language if self._language != DEFAULT_LANGUAGE else "") + "&addressdetails=1&namedetails=1&zoom=18&limit=1" + ("&email=" + self._api_key if self._api_key != DEFAULT_KEY else "")
 
-            osm_decoded = {}
+            decoded = {}
             _LOGGER.info( "(" + self._name + ") OpenStreetMap request sent with lat=" + self._latitude + " and lon=" + self._longitude)
-            _LOGGER.debug( "(" + self._name + ") url - " + osm_url)
-            osm_response = get(osm_url)
-            osm_json_input = osm_response.text
-            _LOGGER.debug( "(" + self._name + ") response - " + osm_json_input)
-            osm_decoded = json.loads(osm_json_input)
+            _LOGGER.debug( "(" + self._name + ") url - " + url)
+            response = get(url)
+            json_input = response.text
+            _LOGGER.debug( "(" + self._name + ") response - " + json_input)
+            decoded = json.loads(json_input)
 
             place_options = self._options.lower()
             place_type = '-'
             place_name = '-'
             place_category = '-'
             place_neighbourhood = '-'
+            street_name = ''
             street_number = ''
             street = 'Unnamed Road'
             city = '-'
@@ -362,56 +367,62 @@ class OpenStreetMap(Entity):
             target_option = ''
             
             if "place" in self._options:
-                place_type = osm_decoded["type"]
+                place_type = decoded["type"]
                 if place_type == "yes":
-                    place_type = osm_decoded["addresstype"]
-                if place_type in osm_decoded["address"]:
-                    place_name = osm_decoded["address"][place_type]
-                if "category" in osm_decoded:
-                    place_category = osm_decoded["category"]
-                    if place_category in osm_decoded["address"]:
-                        place_name = osm_decoded["address"][place_category]
-                if "name" in osm_decoded["namedetails"]:
-                    place_name = osm_decoded["namedetails"]["name"]
+                    place_type = decoded["addresstype"]
+                if place_type in decoded["address"]:
+                    place_name = decoded["address"][place_type]
+                if "category" in decoded:
+                    place_category = decoded["category"]
+                    if place_category in decoded["address"]:
+                        place_name = decoded["address"][place_category]
+                if "name" in decoded["namedetails"]:
+                    place_name = decoded["namedetails"]["name"]
                 for language in self._language.split(','):
-                    if "name:" + language in osm_decoded["namedetails"]:
-                        place_name = osm_decoded["namedetails"]["name:" + language]
+                    if "name:" + language in decoded["namedetails"]:
+                        place_name = decoded["namedetails"]["name:" + language]
                         break
-                if "neighbourhood" in osm_decoded["address"]:
-                    place_neighbourhood = osm_decoded["address"]["neighbourhood"]
+                if "neighbourhood" in decoded["address"]:
+                    place_neighbourhood = decoded["address"]["neighbourhood"]
                 if self._device_zone == 'not_home' and place_name != 'house':
                     new_state = place_name
                     
-            if "house_number" in osm_decoded["address"]:
-                street_number = osm_decoded["address"]["house_number"]
-            if "road" in osm_decoded["address"]:
-                street = osm_decoded["address"]["road"]
-            if "city" in osm_decoded["address"]:
-                city = osm_decoded["address"]["city"]
-            if "town" in osm_decoded["address"]:
-                city = osm_decoded["address"]["town"]
-            if "village" in osm_decoded["address"]:
-                city = osm_decoded["address"]["village"]
-            if "city_district" in osm_decoded["address"]:
-                postal_town = osm_decoded["address"]["city_district"]
-            if "suburb" in osm_decoded["address"]:
-                postal_town = osm_decoded["address"]["suburb"]
-            if "state" in osm_decoded["address"]:
-                region = osm_decoded["address"]["state"]
-            if "county" in osm_decoded["address"]:
-                county = osm_decoded["address"]["county"]
-            if "country" in osm_decoded["address"]:
-                country = osm_decoded["address"]["country"]
-            if "postcode" in osm_decoded["address"]:
-                postal_code = osm_decoded["address"]["postcode"]
-            if "display_name" in osm_decoded:
-                formatted_address = osm_decoded["display_name"]
+            if "road" in decoded["address"]:
+                street_name = decoded["address"]["road"]
+            if "house_number" in decoded["address"]:
+                street_number = decoded["address"]["house_number"]
+            if "road" in decoded["address"] and "house_number" in decoded["address"]:
+                street = decoded["address"]["road"] + " " + decoded["address"]["house_number"]
+            else:
+                street = decoded["address"]["road"]
+            if "city" in decoded["address"]:
+                city = decoded["address"]["city"]
+            if "town" in decoded["address"]:
+                city = decoded["address"]["town"]
+            if "village" in decoded["address"]:
+                city = decoded["address"]["village"]
+            if "city_district" in decoded["address"]:
+                postal_town = decoded["address"]["city_district"]
+            if "suburb" in decoded["address"]:
+                postal_town = decoded["address"]["suburb"]
+            if "state" in decoded["address"]:
+                region = decoded["address"]["state"]
+            if "county" in decoded["address"]:
+                county = decoded["address"]["county"]
+            if "country" in decoded["address"]:
+                country = decoded["address"]["country"]
+            if "postcode" in decoded["address"]:
+                postal_code = decoded["address"]["postcode"]
+            if "display_name" in decoded:
+                formatted_address = decoded["display_name"]
+            if "sv" in self._language:
+                formatted_address = street + ", " + postal_code + " " + postal_town
 
             self._place_type = place_type
             self._place_category = place_category
             self._place_neighbourhood = place_neighbourhood
             self._place_name = place_name
-            
+            self._street_name = street_name
             self._street_number = street_number
             self._street = street
             self._city = city
@@ -423,10 +434,10 @@ class OpenStreetMap(Entity):
             self._formatted_address = formatted_address
             self._mtime = str(datetime.now())
             
-            if 'error_message' in osm_decoded:
-                new_state = osm_decoded['error_message']
+            if 'error_message' in decoded:
+                new_state = decoded['error_message']
                 _LOGGER.info( "(" + self._name + ") An error occurred contacting the web service")
-            elif self._device_zone == "not_home":
+            elif self._device_zone == "not_home" or "do_not_show_home" in self._options:
                 if city == '-':
                     city = postal_town
                     if city == '-':
@@ -460,6 +471,8 @@ class OpenStreetMap(Entity):
                     user_display.append(street_number)
                     user_display.append(street)
                 else:
+                    if "street_name" in display_options:
+                        user_display.append(street_name)
                     if "street_number" in display_options:
                         user_display.append(street_number)
                     if "street" in display_options:
@@ -478,7 +491,6 @@ class OpenStreetMap(Entity):
                     user_display.append(country)
                 if "formatted_address" in display_options:
                     user_display.append(formatted_address)
-
                 if "do_not_reorder" in display_options:
                     user_display = []
                     display_options.remove("do_not_reorder")
@@ -489,7 +501,6 @@ class OpenStreetMap(Entity):
                             target_option = "place_neighbourhood"
                         if option in locals():
                             user_display.append(target_option)
-                            
 
                 if not user_display:
                     user_display = self._device_zone
@@ -499,15 +510,15 @@ class OpenStreetMap(Entity):
                 new_state = ', '.join( item for item in user_display )
                 _LOGGER.debug( "(" + self._name + ") New State built from Display Options will be: " + new_state )
             else:
-                new_state = devicetracker_zone
-                _LOGGER.debug( "(" + self._name + ") New State from DeviceTracker set to: " + new_state)
+                new_state = device_zone
+                _LOGGER.debug( "(" + self._name + ") New State from Device set to: " + new_state)
 
             current_time = "%02d:%02d" % (now.hour, now.minute)
             
             if previous_state != new_state:
                 _LOGGER.info( "(" + self._name + ") New state built using options: " + self._options)
                 _LOGGER.debug( "(" + self._name + ") Building EventData for (" + new_state +")")
-                self._state = new_state + " (since " + current_time + ")"
+                self._state = new_state #+ " (since " + current_time + ")"
                 event_data = {}
                 event_data['entity'] = self._name
                 event_data['place_name'] = place_name
@@ -515,7 +526,7 @@ class OpenStreetMap(Entity):
                 event_data['to_state'] = new_state
                 event_data['distance_from_home'] = distance_from_home
                 event_data['direction'] = direction
-                event_data['devicetracker_zone'] = devicetracker_zone
+                event_data['device_zone'] = device_zone
                 event_data['latitude'] = self._latitude
                 event_data['longitude'] = self._longitude
                 event_data['previous_latitude'] = self._latitude_old
@@ -523,7 +534,7 @@ class OpenStreetMap(Entity):
                 event_data['map'] = self._map_link
                 event_data['mtime'] = current_time
                 #_LOGGER.debug( "(" + self._name + ") Event Data: " + event_data )
-                #self._hass.bus.fire(DEFAULT_NAME+'_state_update', { 'entity': self._name, 'place_name': place_name, 'from_state': previous_state, 'to_state': new_state, 'distance_from_home': distance_from_home, 'direction': direction, 'devicetracker_zone': devicetracker_zone, 'mtime': current_time, 'latitude': self._latitude, 'longitude': self._longitude, 'map': self._map_link })
+                #self._hass.bus.fire(DEFAULT_NAME+'_state_update', { 'entity': self._name, 'place_name': place_name, 'from_state': previous_state, 'to_state': new_state, 'distance_from_home': distance_from_home, 'direction': direction, 'device_zone': device_zone, 'mtime': current_time, 'latitude': self._latitude, 'longitude': self._longitude, 'map': self._map_link })
                 self._hass.bus.fire(DEFAULT_NAME+'_state_update', event_data )
                 _LOGGER.debug( "(" + self._name + ") Update complete...")
 
